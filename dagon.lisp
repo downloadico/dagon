@@ -6,10 +6,11 @@
 
 (ql:quickload :cl-fad)
 
-					;(declaim (optimize (space 3) (debug 3)))
-(declaim (optimize (debug 1) (speed 3)))
+;;(declaim (optimize (space 3) (debug 3)))
+(declaim (optimize (debug 1) (space 2) (speed 3)))
 
-(defun zero-size (l)
+(defun zero-size-p (l)
+  "does the file info list represent a zero-sized file?"
   (eql 0 (car (last l))))
 
 (defun lf (file &key (time-type 'atime))
