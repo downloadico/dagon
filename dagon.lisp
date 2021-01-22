@@ -6,12 +6,8 @@
 
 (ql:quickload :cl-fad)
 
-(declaim (optimize (space 3) (debug 1)))
-;;(declaim (optimize (debug 1) (space 2) (speed 3)))
-
-(defun zero-size-p (l)
-  "does the file info list represent a zero-sized file?"
-  (eql 0 (car (last l))))
+;;(declaim (optimize (space 3) (debug 1)))
+(declaim (optimize (debug 1) (space 2) (speed 3)))
 
 (defmacro with-file-stat ((stat-var file) &body body)
   `(let ((,stat-var (sb-posix:stat ,file)))
@@ -31,6 +27,7 @@
   (- n (mod n *chunk-size*)))
 
 (defun condense-table (ht chunk-size)
+  (warn "condensing ht chunk-size: ~A" chunk-size)
   (let ((new-ht (make-hash-table :size *ht-size*)))
     (loop for k being the hash-keys in ht
        do
@@ -72,7 +69,8 @@
 	      (hash-table-size ht)
 	      *chunk-size*)
       (sb-ext:gc :full t)
-      (room)))
+      ;(room)
+      ))
   ht)
 
 (defun store-size-and-atime (file &optional (time-transform #'round-time))
@@ -81,36 +79,25 @@
       (with-slots ((size sb-posix::size)
 		   (time sb-posix::atime))
 	  stat
-	(if (< .5 (/ (hash-table-count *ht*) (hash-table-size *ht*)))
-	    (setf *ht*  (maybe-squeeze *ht*)))
+	(when (< .5 (/ (hash-table-count *ht*) (hash-table-size *ht*)))
+	  (setf *ht*  (maybe-squeeze *ht*)))
 	(let ((transformed-time (funcall time-transform time)))
 	  (incf (gethash transformed-time *ht* 0) size))))))
 
-(defvar *i* 0)
-(defvar *max* 10000)
 (defun process-file (file &key (fn #'store-size-and-atime))
   "Apply fn to named file"
-  (when (<= *max* (incf *i*))
-    (format t "*i* is <= ~A~%" *max*)
-    (sb-ext:gc :full t)
-    (setf *i* 0))
-  (ignore-errors (funcall fn file)))
-
-(defun process-dir (directory &key (file-fn #'process-file))
-  (multiple-value-bind (files directories)
-      (loop  for dir-entry
-	       in (cl-fad:list-directory directory :follow-symlinks nil)
-	     when  (cl-fad:directory-exists-p dir-entry)
-	       collect dir-entry into dirs
-	     else collect dir-entry into files
-	     finally (return (values files dirs)))
-    (loop for file in files
-       do (funcall file-fn file))
-    (loop for found-dir in directories do
-	 (process-dir found-dir
-		      :file-fn file-fn))))
+  (funcall fn file))
 
 (defun keys (ht)
   (loop for k being the hash-keys in ht collect k))
 
+(let ((*unix-epoch-difference* (encode-universal-time 0 0 0 1 1 1970 0)))
+  (defun universal-to-unix-time (universal-time)
+    (- universal-time *unix-epoch-difference*))
 
+  (defun unix-to-universal-time (unix-time)
+    (+ unix-time *unix-epoch-difference*))
+
+  (defun get-unix-time ()
+    (universal-to-unix-time (get-universal-time)))
+)
